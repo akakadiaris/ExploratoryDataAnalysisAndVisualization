@@ -1,0 +1,486 @@
+---
+title: "Problem Set 2 Fall 2023"
+author: "Alexandra Kakadiaris (UNI:ak5087) and Xinran She (UNI: xs2518)"
+execute:
+  echo: true
+  warning: false
+format:
+  html:
+    fig-width: 7
+    fig-height: 4
+    out-width: 60%
+    embed-resources: true
+---
+
+Note: Grading is based both on your graphs and verbal explanations. Follow all best practices *as discussed in class*, including choosing appropriate parameters for all graphs. *Do not expect the assignment questions to spell out precisely how the graphs should be drawn. Sometimes guidance will be provided, but the absense of guidance does not mean that all choices are ok.*
+
+### 1. Netflix
+
+\[10 points\]
+
+Data: `netflix.csv`
+
+```{r}
+# Import packages needed  
+library(readr) 
+library(ggplot2) 
+library(dplyr) 
+
+# Import netflix csv file into r 
+netflix <- read_csv("netflix.csv") 
+# Make sure imported correctly 
+head(netflix)
+```
+
+a)  Create a frequency bar chart for movie ratings in the United States. (Hint: if you're not familiar with U.S. movie ratings, look them up.)
+
+Use the same data (U.S. movies) for the remaining parts of the question.
+
+```{r}
+# Use filter to subset the data based on the 'type' column to be only movies
+movies <- netflix[netflix$type == "Movie", ] 
+movies <- netflix[netflix$country == "United States", ] 
+#head(movies)
+
+# Check for unique values - if not a rating, then delete the rows that are not part of the MPAA rating #should just be G -> PG -> PG13 -> R -> NC-17
+unique(movies$rating) 
+# Create a subset with rows where Ratings is in MPAA rating 
+subset_movies_df <- subset(movies,rating %in% c("PG-13", "PG", "R", "G", "NC-17"))
+subset_movies_df
+
+# Create a factor column with specific ordering
+subset_movies_df$rating <- factor(subset_movies_df$rating, levels = c("G","PG","PG-13","R","NC-17"))
+
+# Create a bar plot of the counts
+ggplot(subset_movies_df, aes(x = rating)) + 
+  geom_bar(fill ="lightgreen", color="black") + 
+  labs(title = "Movie Ratings in the US", x = "Rating", y = "Frequency") + 
+  theme_minimal()
+```
+
+For this analysis, we first subseted the data to only include Movies, and not TV Shows. We did that by subseting data on "type" column. After that, we deleted the rows in "rating" that did not have the rating (G, PG, PG-13, R, and NC-17) that were a part of MPAA rating system. We then used factor() to give specific ordering for the ratings. That was to pre-process the data. Then, using ggplot(), a bar plot for the number of movies that correspond to each rating.
+
+b)  Suppose we want to understand trends in ratings over time. There are multiple ways by which we could convert the numeric variable `release_year` into a categorical variable for faceting purposes. For this part, we will divide the release year into equal range groups (similar to binwidths), namely decade periods. Use `cut()` to create a new variable called `decade` to represent the decades: 1950-1959, 1960-1969, etc. Redraw the graph from part a) faceting on `decade`. What trends do you observe?
+
+Hint: you can eliminate exponential notation produced by `cut()` by increasing the value of the `dig.lab` parameter.
+
+```{r}
+# Create a new variable 'decade' by cutting 'release_year' into decade groups
+decades <- c("1950-1959", "1960-1969", "1970-1979", "1980-1989", "1990-1999", "2000-2009", "2010-2019", "2020-2021")
+
+subset_movies_df$decade <- cut(subset_movies_df$release_year, breaks = seq(1950, 2030, by = 10), right = FALSE, labels=decades)
+
+# Create a bar plot faceted by 'decade' to observe trends in ratings over time
+ggplot(subset_movies_df, aes(x = rating)) +
+  geom_bar(fill="lightgreen") + 
+  facet_wrap(~ decade, nrow = 4) +
+  labs(title = "Trends in Ratings Over Time by Decade", x = "Rating", y = "Frequency")
+```
+
+# For this part, we will divide the release year into equal range groups (similar to binwidths), namely decade periods. Use cut() to create a new variable called decade to represent the decades: 1950-1959, 1960-1969, etc. Redraw the graph from part a) faceting on decade.
+
+For this question, since we wanted the release year to be equal range, we used cut() to group movies based on decade. It was important that it is right-open. Then we created a ggplot() that shows this subset using facet_wrap.
+
+Based on this graph, you can see that the first four decades (1950-1989) barely have any movies. Then for the next two decades, the number of movies increase. Then the decade for 2010-2019 seems to have the most movies. The last decade does not have many movies, but that is expected because this period spans only 1 year. In terms of trends for the ratings (not taking into account 2020-2021), over time there has been an increase in PG-13 movies. That being said, the rating with the most movies, besides 2000-2009 when it was a little less that PG-13, across decades in R and then PG-13.
+
+c)  Another option is to divide the release years into groups of equal size rather than equal range, which is the strategy used by boxplots. Use `cut()` with `quantile()` to divide the data into four groups of roughly equal size and again redraw the ratings bar chart from part a) faceted by the new column (call it `period`). Make sure your labeling is clear so the reader knows what is being shown in each facet and how the years were split. Describe the advantages and disadvantages of this method compared to the method in part b).
+
+Hint: if you end up with an `NA` for period figure out why and fix it appropriately.
+
+```{r}
+# Determine the quantiles of release_year
+quantiles <- quantile(subset_movies_df$release_year)
+
+# Create a new column 'period' by cutting release_year into quantile-based groups
+subset_movies_df$period <- cut(subset_movies_df$release_year, breaks = quantiles, labels = c("Q1", "Q2", "Q3", "Q4"), include.lowest = TRUE, right=FALSE)
+
+# Calculate the minimum and maximum release year for each quarter
+min_max_by_period <- subset_movies_df %>% 
+  group_by(period) %>%
+  summarize(min_release_year = min(release_year), max_release_year = max(release_year)) 
+print(min_max_by_period)
+
+# Make labeling clear about release year information
+subset_movies_df <- subset_movies_df %>% 
+  mutate(period = recode(period, "Q1" = "1955-2002", 
+                                 "Q2" = "2003-2011", 
+                                 "Q3" = "2012-2016", 
+                                 "Q4" = "2017-2021"))
+
+# Create a ratings bar chart faceted by 'period'
+
+ggplot(subset_movies_df, aes(x = rating)) +
+  geom_bar(fill="lightgreen") + 
+  facet_wrap(~ period, nrow = 2) +
+  labs(title = "Ratings Distribution Over Equal Size", x = "Rating", y = "Frequency") +  scale_x_discrete(labels = c("PG" = "PG", "PG-13" = "PG-13", "R" = "R", "NC-17" = "NC-17")) + theme(strip.text.x = element_text(size = 11, face = "bold"))
+```
+
+With this question, we first decided the quantiles for the release year and made sure to include RIGHT=false to indicate right open. Then we created a new column called period that subsets the data based on those quantiles. To ensure that labeling makes sense, we recorded the quarters to include the range of years in that quantile. After that, a ggplot() was created based on the new "period" column. It was also important to ensure that the x-axis also had description for the rating.
+
+An advantage to this method is that you are breaking up the data into the same amount of movies for each set of years. This function automatically does this and does not take manual work of you deciding how to split the data. A disadvantages to this method is that the number of years in each grouping is not the same. Therefore, it can be hard to make analysis and interpret this analysis geared towards different time periods.
+
+d)  A tidyverse alternative to the `cut()` + `quantile()` method of part c) is to use `dplyr::ntile()` to divide data into groups of equal size. Redo part c) using `ntile()`. Again make sure your labeling is clear.
+
+```{r}
+# Use ntile() to create a new column 'period2' with equal-size groups and make labeling clear for period2
+subset_movies_df <- subset_movies_df %>% 
+  mutate(period2 = dplyr::ntile(release_year, 4))
+
+min_max_by_period2 <- subset_movies_df %>% 
+  group_by(period2) %>%
+  summarize(min_release_year = min(release_year), max_release_year = max(release_year)) 
+
+print(min_max_by_period2)
+
+subset_movies_df <- subset_movies_df %>% mutate(period2 = recode(period2, "1" = "1955-2003", "2" = "2003-2012", "3" = "2012-2017", "4" = "2017-2021"))
+
+# Create a ratings bar chart faceted by 'period' with clear labeling
+ggplot(subset_movies_df, aes(x = rating)) +
+  geom_bar(fill="lightgreen") + facet_wrap(~ period2, nrow = 2) +
+  labs(title = "Ratings Distribution using ntile()", x = "Rating", y = "Frequency")
+```
+
+For this question, we subseted the data using ntile() function. Since this function is simply just splitting the data into 4 equal parts, you do not specify if it is right open or right closed. To make the labels make more sense, I recoded the data to include the group of years per time period after finding the min and max year for each subset of data. Then, a ggplot() plot was created to show off this way of dividing release year.
+
+e)  Why aren't the graphs in part c) and part d) identical? Describe the advantages and disadvantages of the method used by each (that is, `cut()` vs. `ntile()`.)
+
+The graphs in part c and part d are not identical because each method utilized has a different way of grouping the data into intervals. With the cut() + quantile() function, quantiles uses quantile intervals to divide the data. With ntile(), this divides the data into intervals of equal size. That is why you will see in part c has year interval of 2018-2021, while in part d it has a year interval of 2017-2021.
+
+Using cut() and quantile() function can be useful because the intervals given are based on the distribution of the data. Not all data will be normal, so this ensures that each interval has an equal number of data points. That being said, the trade off is that it will not be the same distribution of time. For example, q1 has about 50 years of data included, while q4 only has 3 years of data included. Ntile() is useful when you need to cut the data into groups with the equal amount of sample size. Unlike cut() and quantile(), they do not take into account the distribution of the data and performs poorly with outliers.
+
+### 2. SleepStudy
+
+\[4 points\]
+
+Data: **SleepStudy** in the **Lock5withR** package
+
+```{r}
+#install.packages("Lock5withR") 
+library(ggplot2) 
+library("Lock5withR") 
+head(SleepStudy)
+dim(SleepStudy)
+```
+
+For each of the following parts, draw a bar chart or histogram as appropriate to show frequency counts. Hint: check the x-axis carefully for clear, human-readable labels and appropriate tick marks and tick mark labels. In a bar chart, every bar should be labeled.
+
+a)  `Gender`
+
+```{r}
+# Change 0 and 1's of Gender to be Male and Female
+SleepStudy <- SleepStudy %>% 
+  mutate(Gender = case_when(
+    Gender == 1 ~ "Male",
+    Gender == 0 ~ "Female",
+    TRUE ~ as.character(Gender)))
+
+# Create a bar chart for gender
+ggplot(SleepStudy, aes(x = Gender)) + 
+  geom_bar(fill = "lightgreen", color="black") + 
+  labs(title = "Gender Distribution", x = "Gender", y = "Frequency")
+```
+
+For this question, it was important to change 0 and 1 to respond to gender, accordingly. When looking up the dataset, it says that 1 is for Male and 0 is for Female. Therefore, I changed the values in Gender column to respond to Male or Female. Next, I created a bar chart to show the frequency of female and males in this dataset.
+
+b)  `NumEarlyClass`
+
+```{r}
+# Find min and max number of early classes for x-axis
+min(SleepStudy$NumEarlyClass) 
+max(SleepStudy$NumEarlyClass)
+
+# Plot the distribution
+ggplot(SleepStudy, aes(x = NumEarlyClass)) + 
+  geom_bar(binwidth = 1, fill = "lightgreen", color = "black") + 
+  scale_x_continuous(breaks = seq(0, 5, by = 1), labels = seq(0, 5, by = 1))+
+  labs(title = "Number of Early Classes Frequency", x = "Number of Early Classes", y = "Frequency")
+
+```
+
+For this question, I first calculated the min and max number of early classes, to dictate where the x-axis starts and ends. I then used those values for the limits for the ggplot() and plotted the frequency of number of early classes for the dataset. We choose a bar plot because the x-axis values are discrete.
+
+c)  `AlcoholUse`
+
+```{r}
+# Change the order of the x-axis
+SleepStudy$AlcoholUse <- factor(SleepStudy$AlcoholUse,levels=c("Abstain", "Light", "Moderate", "Heavy"))
+
+# Plot the graph 
+ggplot(SleepStudy, aes(x = AlcoholUse)) + 
+  geom_bar(fill="lightgreen", color = "black") + 
+  labs(title = "Alcohol Use Frequency", x = "Alcohol Use", y = "Frequency")
+```
+
+For this question, I first used factor() to establish the order for the Alcohol Use column in the dataset. After that, I used ggplot() to create a bar plot (x-axis is order that was established for Alcohol Use) that shows frequency for each level of alcohol use.
+
+d)  `AverageSleep`
+
+```{r}
+# Calculate the min and max values for the x-axis
+min(SleepStudy$AverageSleep) 
+max(SleepStudy$AverageSleep)
+
+# Plot the graph
+ggplot(SleepStudy, aes(x = AverageSleep)) + 
+  geom_histogram(binwidth = 0.5, fill = "lightgreen", color = "black") + 
+  labs(title = "Average Sleep Duration Distribution", x = "Average Sleep (Hours)", y = "Frequency") +
+  scale_x_continuous(breaks = seq(4.5, 11, by = 0.5), labels = seq(4.5, 11, by = 0.5))
+```
+
+For this question, I first calculated the min and max for average sleep, to dictate the x-axis. I noticed that the data is not whole numbers or even rounded. For that reason, we used a histogram. I then used the min and max values for the limits for the ggplot() and plotted the frequency of average sleep for the dataset. When deciding the sequence for the x-axis, we decided on 0.5 (or 30 minutes) because that gave more granularity than hour but not too much as with 0.25 (15 minutes) intervals. We also said that usually sleep is measured in half hours (I slept for 6 and a half hours, etc.).
+
+### 3. Nutritional Facts for most common foods
+
+```{r}
+# Packages needeed for part 3 and part 4
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(readr)
+library(MASS)
+```
+
+\[12 points\]
+
+Data: nutrients.csv
+
+The original source of the data is: https://en.wikipedia.org/wiki/Table_of_food_nutrients though there may be discrepancies between values on this page and the dataset.
+
+**Note** In the Measure column, "t" = teaspoon and "T" = tablespoon. In the food nutrient columns, the letter "t" indicates that only a trace amount is available (which you can assume is 0).
+
+a)  Create a new `calorie_density` column defined as calories per gram. Create a Cleveland dot plot for the 10% of foods with the highest calorie density. Note any data abnormalities in the plot.
+
+```{r}
+
+nutrients <- read.csv("nutrients.csv")
+head(nutrients)
+
+# Drop missing values in the columns Calories and Grams
+nutrients %>% drop_na(c('Calories', 'Grams'))
+
+# Transfer Calories and Grams to numeric to calculate calories per gram
+nutrients$Calories <- as.numeric(nutrients$Calories)
+nutrients$Grams <- as.numeric(nutrients$Grams)
+nutrients$calorie_density <- nutrients$Calories / nutrients$Grams
+
+# Use order() to sort the 10% highest calorie_density in nutrients
+sorted_cal_density <- nutrients[order(-nutrients$calorie_density), ]
+top_10_percent <- head(sorted_cal_density, nrow(sorted_cal_density) * 0.1)
+
+ggplot(top_10_percent, aes(x = calorie_density, y = fct_reorder(Food,calorie_density))) +
+  geom_point(color = "cornflowerblue") +
+  # theme_bw() is more readable than theme_linedraw()
+  theme_bw() +
+  labs(x = "calorie_density (calories per gram)", y = NULL,
+       title = "10% of Foods with Highest Calorie Density")
+
+```
+
+One of the abnormalities that is present is that safflower seed oil, olive oil, and corn oil all have the same calorie density. Another anomaly is the fact that this also happens between thousand island sauce and powdered milk.There are also gaps between 7-9 calorie_density.
+
+b)  Determine the food categories with the highest and lowest mean calorie density. Create a Cleveland dot plot of calorie density by food, showing only these two categories. (Facet by `Category`.) Note any data abnormalities in the plot.
+
+```{r}
+# Use arrange to order rows by specific column 
+food_categories <- nutrients %>% 
+  drop_na(c("Calories", "Grams")) %>%
+  group_by(Category) %>%
+  summarise(mean_calorie_density = mean(calorie_density)) %>%
+  arrange(mean_calorie_density)
+
+highest_mean_category <- food_categories$Category[food_categories$mean_calorie_density==max(food_categories$mean_calorie_density)]
+lowest_mean_category <- food_categories$Category[food_categories$mean_calorie_density==min(food_categories$mean_calorie_density)]
+
+two_food_categories <- nutrients %>%
+  filter(Category %in% c(highest_mean_category, lowest_mean_category))
+
+ggplot(two_food_categories, aes(x = calorie_density, y = reorder(Food, calorie_density))) +
+  geom_point(color = "cornflowerblue") +
+  facet_grid(Category~., scales = "free_y", space = "free_y") +
+  labs(title = "Cleveland Dot Plot of Calorie Density by Food", y = NULL) +
+  theme_bw() 
+
+
+```
+
+Abnormalities: There are two dots for the same butter, clearly the smaller one is an outlier. From nutrients data set, there are three Butter; two of them have calorie_density around 1, one is around 7.4. Despite the outlier, there are gaps between 7 to 9 calorie_density.
+
+c)  Use the same method as above to calculate protein density and carbohydrate density. Create a scatterplot of protein density vs. carbohydrate density faceted by category. To make the plot look better, combine different `Fruit` categories into one new category and do the same for `Vegetables`. What can you learn from the plot?
+
+```{r}
+# Use gsub() to replace t with 0
+nutrients_no_t <- nutrients %>% drop_na(c("Protein", "Carbs", "Calories")) 
+nutrients_no_t$Protein <- gsub("t", "0", nutrients_no_t$Protein)
+nutrients_no_t$Carbs<- gsub("t", "0", nutrients_no_t$Carbs)
+
+# Combine different "Fruit" and "Vegetables" categories
+nutrients_long <- nutrients_no_t %>%
+  mutate(Category = ifelse(Category %in% c("Fruits A-F", "Fruits G-P", "Fruits R-Z"), "Fruit", ifelse(Category %in% c("Vegetables A-E", "Vegetables F-P", "Vegetables R-Z"), "Vegetables", Category)))
+
+# Transfer Calories, Protein, and Carbs to numeric to calculate density
+nutrients_long$Calories <- as.numeric(nutrients_long$Calories)
+nutrients_long$Carbs <- as.numeric(nutrients_long$Carbs)
+nutrients_long$Protein <- as.numeric(nutrients_long$Protein)
+nutrients_long$protein_density <- nutrients_long$Protein / nutrients_long$Grams
+nutrients_long$carbs_density <- nutrients_long$Carbs / nutrients_long$Grams
+
+ggplot(nutrients_long, aes(x = protein_density, y = carbs_density)) +
+  geom_point(color = "cornflowerblue") +
+  facet_wrap(~Category ) +
+  labs(title = "Scatterplot of Protein Density vs. Carbohydrate Density", 
+       x = "Protein Density", 
+       y = "Carbohydrate Density") +
+  theme_bw(4)
+
+```
+
+We choose not to use scales = "free" in facetwrap so that all axis are the same and it is easier to compare the different plots. From the plot, we can learn Jams, Jellies, Drinks, Alcohol and Beverage all have 0 protein density, so there are vertical lines at x = 0 in the two plots. There is no strong linear relationship in other categories. For Fats and Fish, when protein density is low, carbohydrate density is low, and when the former is high, the later is high, however there exists large gaps so it's hard to conclude there are linear relationship in these two categories.
+
+d)  Create an interactive scatterplot of protein calories vs. overall calories which shows the food name when you hover over a point. Explain how you calculated protein calories. If you find clear errors in the data based on this ratio remove the problematic rows and redraw, clearly stately which rows were removed. What are some foods with very high ratios of protein calories to overall calories? With very low ratios?
+
+```{r}
+library(plotly)
+nutrients_protein_calories <- nutrients_no_t
+nutrients_protein_calories <- nutrients_protein_calories %>%
+  mutate(protein_calories = as.numeric(Protein) * 4)
+
+g <- ggplot(nutrients_protein_calories, aes(Calories, protein_calories, label = Food)) + labs(title = "Protein Categories vs Overall Categories with problematic rows") +
+  geom_point(color = "cornflowerblue")
+ggplotly(g)
+
+# Clear Error: protein_calories shouldn't exceed overall calories, remove the rows and redraw. And there is a negative protein_calories, remove that too.
+nutrients_protein_calories_rm <- nutrients_protein_calories %>%
+  filter(protein_calories <= Calories)
+
+# Remove negative protein_calories
+nutrients_protein_calories_rm <- nutrients_protein_calories_rm %>%
+  filter(protein_calories >= 0)
+
+g2 <- ggplot(nutrients_protein_calories_rm, aes(Calories, protein_calories, label = Food)) +
+  geom_point(color = "cornflowerblue") + labs(title = "Protein Categories vs Overall Categories without problematic rows")
+ggplotly(g2)
+
+# Rows that are removed
+rm_rows <- nutrients_protein_calories %>%
+  filter(protein_calories > Calories | protein_calories < 0)
+print(rm_rows)
+# Row 31, 32, 83, 101, 142 in the original nutrients dataset are removed.
+
+
+```
+
+Calculate protein calories: In the last few rows(324-335), rows 306-307, rows 295-299, rows 186-192 of nutrients_no_t, we can find all others nutrients except Carbs are close to 0, by calculating the average of Carbs calories 3527/825 ≈ 4. Then we plug Carbs calories into row 2, 7, 20, where all other nutrients except Carbs and Protein are close to 0. 36x + 52y =360, 30x + 42y + m = 290, 38x + 6y + n = 225. Since y, Carbs calories, is close to 4 as calculated above; x, Protein calories, is close to 4. We can plug x = 4 into other rows to verify.
+
+Foods like Stalk raw, Bouillon, Shrimp, Lobster have high ratios of protein calories to overall calories, while Salt, pork, Frozen, Dates have very low ratios.
+
+e)  The National Academy of Medicine in the United States recommends that protein should account for 10%-35% of one's daily caloric intake. (See: https://www.hsph.harvard.edu/nutritionsource/what-should-you-eat/protein/) Suppose you wish to follow this recommendation and to make things simple you want to only eat foods with this percentage of protein. To assist you with this eating plan, create a static version of your graph from part d) in which food points are colored by their protein content as follows:
+
+::: {style="width:325px;"}
+| \% calories from protein | label               |
+|--------------------------|---------------------|
+| \< 10%                   | too little protein  |
+| 10% - 35%                | recommended protein |
+| \> 35%                   | too much protein    |
+:::
+
+Add lines to serve as boundaries between different colored points. Label some of the points with the food name using `ggrepel::geom_text_repel()` (It will drop many of the point labels automatically due to overlaps.)
+
+(To be clear, this isn't a sensible diet! One should consider the percentage of protein overall not on a food by food basis.)
+
+```{r}
+# Calculate the percentage of protein calories
+nutrients_percent <- nutrients_protein_calories_rm %>%
+  mutate(percentage_protein_calories = (protein_calories / Calories) * 100)
+
+# Use case_when() from dplyr to create a new variable that relies on a complex combination of existing variables
+nutrients_labels <- nutrients_percent %>%
+  mutate(protein_percent_labels = case_when(
+    percentage_protein_calories < 10 ~ "too little protein",
+    percentage_protein_calories >= 10 & percentage_protein_calories <= 35 ~ "recommended protein",
+    percentage_protein_calories > 35 ~ "too much protein"
+  ))
+#install.packages('ggrepel')
+library(ggrepel)
+
+g3 <- ggplot(nutrients_labels, aes(x = Calories, y = protein_calories, color = protein_percent_labels, label = Food)) +
+  geom_point() +
+  labs(x = "Calories", y = "protein_calories") +
+  geom_text_repel(segment.size = 0.1) +
+  # Add boundaries by geom_abline() manually 
+  geom_abline(intercept = 1.9, slope = 0.09, col = "black") +
+  geom_abline(intercept = 1.9, slope = 0.35, col = "black") +
+  # Scale colors by labels manually 
+  scale_color_manual(values = c("too little protein" = "#00000030", "recommended protein" = "#ff000050", "too much protein" = "#0180FF50")) +
+  theme_bw()
+
+g3
+```
+
+### 4. Babies
+
+\[4 points\]
+
+Data: *babies* in the **openintro** package
+
+```{r}
+library(openintro)
+head(babies)
+```
+
+For all, adjust parameters to the levels that provide the best views of the data and describe what you see. (It is not necessary to repeat information -- for parts b) - d) describe anything new that wasn't previously visible.)
+
+Draw four plots of `bwt` vs. `gestation` with the following variations:
+
+a)  Scatterplot -- adjust point size and `alpha`.
+
+```{r}
+ggplot(babies, aes(y = bwt, x = gestation)) +
+  geom_point(size = 1.5, alpha = 0.3) +
+  labs(title = "Scatterplot",
+       y = "bwt (in ounces)", 
+       x = "gestation (in days)") 
+
+```
+
+There might be positive correlation between gestation and bwt. The points are clustered. There are some outliers, like point around 150 gestation. We choose to put bwt on y axis because it is dependent on gestation. Overall, there seems to be an upward trend with some outliers scattered around.
+
+b)  Scatterplot with density contour lines
+
+```{r}
+ggplot(babies, aes(y = bwt, x = gestation)) +
+  geom_point(size = 1.5, alpha = 0.3) +
+  geom_density2d() +
+  labs(title = "Scatterplot with Density Contour Lines",
+       y = "bwt (in ounces)", 
+       x = "gestation (in days)") 
+
+```
+
+Density contour lines clearly show the density in the clustered region, suggesting a strong relationship. Gestation and bwt are more likely to have combination pairs around 250-300 gestation in days, and 80-160 bwt in ounces. The highest concentration seems to be around 275 gestation and 122 bwt.
+
+c)  Hexagonal heatmap of bin counts
+
+```{r}
+ggplot(babies, aes(y = bwt, x = gestation)) +
+  geom_hex(binwidth = c(5, 5)) +
+  scale_fill_viridis_c() +
+  labs(title = "Hexagonal Heatmap of Bin Counts",
+       y = "bwt (in ounces)", 
+       x = "gestation (in days)") 
+
+```
+
+Hexagonal heatmap of bin counts uses bins to represent data points. We can see the clear number counts distinguished by colors. The most concentrated part has over 30 counts, which means over 30 data points cluster at around 275 gestation and 122 bwt. The concentration region decreases from over 30 counts to less than 10 counts, and the heatmap explicitly shows outliers.
+
+d)  Square heatmap of bin counts
+
+```{r}
+ggplot(babies, aes(y = bwt, x = gestation)) +
+  geom_bin2d(binwidth = c(5, 5)) +
+  scale_fill_viridis_c() + 
+  labs(title = "Square Heatmap of Bin Counts",
+       y = "bwt (in ounces)", 
+       x = "gestation (in days)") 
+```
+
+There is not much difference in square and hexagonal heatmap. It seems that with a square heatmap, the colors in the middle density of the heatmap group together, but it is more pronounced in the hexagonal heatmap.

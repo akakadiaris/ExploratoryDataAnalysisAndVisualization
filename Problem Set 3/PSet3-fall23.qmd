@@ -1,0 +1,795 @@
+---
+title: "Problem Set 3 Fall 2023"
+execute:
+  echo: true
+format:
+  html:
+    fig-width: 6
+    fig-height: 4
+    out-width: 70%
+    embed-resources: true
+---
+
+### 1. Nutrients Revisited
+
+data: `nutrients_pset3.csv`
+
+a)  Create a static parallel coordinates plot using `GGally::ggparcoord()` with the default scale to show trends in the variables in the dataset. Each line should represent a single food. What trends are visible?
+
+```{r}
+library(tidyr)
+library(dplyr)
+library(GGally)
+
+
+# Read in the file
+nutrients <- read.csv("nutrients_pset3.csv")
+#print(nutrients)
+
+#convert t values into 0
+nutrients[nutrients == "t"] <- "0"
+
+#convert X,XXX to XXXX values
+nutrients$Grams <- readr::parse_number(nutrients$Grams)
+nutrients$Calories <- readr::parse_number(nutrients$Calories)
+
+#drop rows that have na
+nutrients <- na.omit(nutrients)
+
+convert_to_numeric <- function(x) {
+  numeric_values <- suppressWarnings(as.numeric(x))
+  # numeric_values[is.na(numeric_values) | is.infinite(numeric_values)] <- NA
+  return(numeric_values)
+}
+
+nutrients <- nutrients %>%
+  mutate_at(vars(Grams, Calories, Protein, Fat, Sat.Fat, Fiber, Carbs), convert_to_numeric) %>%
+  replace_na(replace = list(Grams = 0, Calories = 0, Protein = 0, Fat = 0, Sat.Fat = 0, Fiber = 0, Carbs = 0))
+
+# Create the parallel coordinates plot
+# take out food and Category column because not a variable
+parcoord_plot <- ggparcoord(nutrients, scale="std", columns=3:9, alphaLines=0.5)
+parcoord_plot
+```
+
+Since the scaling is default, we find patterns that are scaled. This means our observations must only influence the gradient of each feature and it's relative prominence.
+
+We find a strong knit/mesh pattern between grams and calories, it is probably because the food items that were intentionally measured in higher quantity when deemed they have significantly less calories, and vice versa. We decode this mesh when we plot an unscaled version of this graph.
+
+The relation between fat and sat.fat is very interesting. We see how closely they resemble each other.
+
+b)  Redraw the graph without any scaling of the variables. What new information is visible?
+
+```{r}
+# Create the parallel coordinates plot without scaling
+parcoord_plot_unscaled <- ggparcoord(nutrients, columns=3:9, scale = "globalminmax")
+parcoord_plot_unscaled
+```
+
+The scaling option globalminmax gives unscaled parallel coordinate plot. Based on this graph, there seems to be a larger distribution of values in calories and grams versus any other column. That being said, it seems that those foods that have a high calorie count, have a significantly low protein count. Also from this graph, you can see that the values for protein, fat, saturated fats, and fiber are roughly the same.
+
+We see that many of our samples have low protein and high calorie relation. This can also influence our modeling. The mesh pattern between Grams and Calories tell us that there might be some external influence in sampling foods.
+
+c)  Use an interactive parallel coordinates plot to identify several prominent multivariate outliers. Indicate if any appear to be impossibilities. (You will likely need to subset the data to be able to read the names of the foods.)
+
+```{r}
+
+# Assuming 'nutrients' is your data frame
+nutrients_outliers <- nutrients %>%
+  filter(
+    Protein > quantile(Protein, 0.75) + 1.5 * IQR(Protein) | 
+    Calories > quantile(Calories, 0.75) + 1.5 * IQR(Calories) | 
+    Protein < quantile(Protein, 0.25) - 1.5 * IQR(Protein) |
+    Calories < quantile(Calories, 0.25) - 1.5 * IQR(Calories) |
+    Protein < 0 |
+    Calories < 1
+  )
+
+# Create a data frame without outliers
+nutrients_no_outliers <- nutrients %>%
+  filter(
+    !(Protein > quantile(Protein, 0.75) + 1.5 * IQR(Protein) | 
+    Calories > quantile(Calories, 0.75) + 1.5 * IQR(Calories) | 
+    Protein < quantile(Protein, 0.25) - 1.5 * IQR(Protein) |
+    Calories < quantile(Calories, 0.25) - 1.5 * IQR(Calories) |
+    Protein < 0 |
+    Calories < 1)
+  )
+
+```
+
+```{r}
+# Create an interactive parallel coordinates plot for nutrients_outliers
+parcoords::parcoords(
+  nutrients_outliers,
+  reorderable = TRUE,
+  brushMode = '1D-axes',
+  width = 700,
+  height = 600,
+  rownames = F
+)
+
+# Create an interactive parallel coordinates plot for nutrients_non_outliers
+parcoords::parcoords(
+  nutrients_no_outliers,
+  reorderable = TRUE,
+  brushMode = '1D-axes',
+  width = 700,
+  height = 600,
+  rownames = F, 
+)
+```
+
+d)  Calculate the protein, fat, and carb proportion of each food by weight. For example, buttermilk contains 9 grams protein, 5 grams fat and 13 grams carbs, the proportions are .333, .185 and .481 respectively. Draw a parallel coordinates plot using these proportions as the values for the y-axis (unscaled). Include only the Breads, Fish, and Seeds categories, with a separate color for each category. What trends do you observe?
+
+```{r}
+# Load necessary libraries
+library(GGally)
+library(ggplot2)
+
+# Convert relevant columns to numeric
+num_cols <- c("Protein", "Fat", "Carbs")
+nutrients[, num_cols] <- apply(nutrients[, num_cols], 2, as.numeric)
+
+# Calculate proportions
+nutrients$Protein_Proportion <- nutrients$Protein / rowSums(nutrients[, c("Protein", "Fat", "Carbs")])
+nutrients$Fat_Proportion <- nutrients$Fat / rowSums(nutrients[, c("Protein", "Fat", "Carbs")])
+nutrients$Carbs_Proportion <- nutrients$Carbs / rowSums(nutrients[, c("Protein", "Fat", "Carbs")])
+
+# Subset the dataframe for the selected categories
+selected_categories <- c("Breads, cereals, fastfood,grains", "Fish, Seafood", "Seeds and Nuts")
+subset_foods <- nutrients[nutrients$Category %in% selected_categories, ]
+
+
+# Create a parallel coordinates plot
+plot <- GGally::ggparcoord(
+  subset_foods,
+  columns = 11:13,
+  groupColumn = "Category",
+  scale = "globalminmax",
+  showPoints = FALSE,
+  alphaLines = 0.5
+)
+
+# Customize the plot further if needed (e.g., add color)
+plot + scale_color_manual(values = c("Breads, cereals, fastfood,grains" = "pink", "Fish, Seafood" = "lightblue", "Seeds and Nuts" = "lightgreen")) +
+  labs(title = "Parallel Coordinates Plot of Proportions",
+       x = "Nutrients",
+       y = "Proportions")
+```
+
+Based on this parallel coordinate plot, it seems that the breads, cereals, fastfood, grains food tend to have lower proportion of protein and fat while high proportion of carbs. For Fish and Seafood food items, it seems that they are high proportion of protein, middle proportion of fat and low proportion of carbs. Lastly, for seeds and nuts, they have low proportion of protein and carbs, but high proportion of fat.
+
+e)  The dataset contains an entry with `Unknown` food and `Unknown` category. Add it to the parallel coordinate plot drawn in part d). What category does it appear to belong to?
+
+```{r}
+
+# Find the row with "Unknown" in the Category column in the nutrients dataframe
+unknown_entry <- nutrients[nutrients$Category == "Unknown", ]
+
+# Combine the unknown_entry with the subset_nutrients dataframe
+combined_foods <- rbind(subset_foods, unknown_entry)
+
+# Create a parallel coordinates plot
+plot <- GGally::ggparcoord(
+  combined_foods,
+  columns = 11:13,
+  groupColumn = "Category",
+  scale = "globalminmax",
+  showPoints = FALSE,
+  alphaLines = 0.5
+)
+
+# Customize the plot further if needed (e.g., add color)
+plot + scale_color_manual(values = c("Breads, cereals, fastfood,grains" = "pink", "Fish, Seafood" = "lightblue", "Seeds and Nuts" = "lightgreen", "Unknown" = "purple")) +
+  labs(title = "Parallel Coordinates Plot of Proportions",
+       x = "Nutrients",
+       y = "Proportions")
+```
+
+Based on this graph, it seems that the unknown food should be part of the Seeds and Nuts group. That is because it follows in the pattern of having low protein and carbs proportion while having a high fat proportion.
+
+### 2. External causes of death
+
+data: `cod.txt`
+
+Source: CDC
+
+For this question, we will study the underlying cause of death with regard to age, gender, and race.
+
+a)  Remove the rows and columns associated with the metadata (`Notes` column and rows which contained notes.) Display total deaths by `Gender`.
+
+```{r}
+# Read in the file
+# Read in the tab-delimited text file
+cod <- read.delim("cod.txt", header = TRUE, sep = "\t")
+
+# remove the first column labeled 'Notes' that is empty for all rows 
+cod <- cod[,-1]
+
+# Calculate the total deaths by 'Gender' this is because there is a column Deaths. That means that row might be more than one death
+total_deaths_by_gender <- aggregate(Deaths ~ Gender, cod, sum)
+
+# Plot this
+ggplot(total_deaths_by_gender, aes(x = Gender, y = Deaths)) +
+  geom_bar(stat="identity",fill = "lightblue") +
+  labs(title = "Total Deaths by Gender", x = "Gender", y = "Total Deaths")
+
+# Display total deaths by Gender
+cod %>%
+    select(c(Gender, Deaths)) %>%
+    group_by(Gender) %>%
+    summarise(TotalDeaths = sum(Deaths))
+```
+
+We only observe marginal differences in COD vs Race, it is probably due Race being imbalanced.
+
+b)  For this question, we will focus on **external causes of morbidity and mortality**, indicated by `Cause of death Code` starting with V, W, X, and Y. These are the subchapters of the larger category (or "chapter"). Transform your data as follows:
+
+-   Create a new column containing the first letter of the `Cause of death Code`.
+
+-   Filter for V, W, X and Y.
+
+-   Add a column with a more descriptive, yet short, name for these subchapters. See: https://www.outsourcestrategies.com/blog/why-how-use-icd10-external-causes-codes.html for help.
+
+-   Remove the following since the numbers are very small: age groups `< 1 year`, `1-4 years`, `5-14 years` and `Not Stated` and racial group `American Indian or Alaska Native`.
+
+-   Shorten the race labels to `Asian`, `Black`, `White`.
+
+Display the breakdown of deaths by subchapter using the descriptive name.
+
+*For parts c) and e), treat subchapter as the dependent variable.*
+
+```{r}
+# Create a new column containing the first letter of the Cause of death Code
+cod <- cod %>%
+  mutate(First_Letter = substr(`Cause.of.death.Code`, 1, 1))
+
+# Filter for V, W, X, and Y
+cod_filtered <- cod %>%
+  filter(First_Letter %in% c("V", "W", "X", "Y"))
+
+# Add a column with a more descriptive name for these subchapters
+cod_filtered <- cod_filtered %>%
+  mutate(Subchapter = case_when(
+    First_Letter == "V" ~ "Transport Accidents",
+    First_Letter == "W" ~ "Falls/Exposure",
+    First_Letter == "X" ~ "Self-Harm/Assault/Undetermined",
+    First_Letter == "Y" ~ "Legal/Military/Medical"
+  ))
+
+# Remove specified age groups and racial group
+cod_filtered <- cod_filtered %>%
+  filter(!(Ten.Year.Age.Groups %in% c("< 1 year", "1-4 years", "5-14 years", "Not Stated")) &
+           !(Race == "American Indian or Alaska Native"))
+
+# Shorten race labels
+cod_filtered <- cod_filtered %>%
+  mutate(Race = case_when(
+    Race == "Asian" | Race == "Asian or Pacific Islander" ~ "Asian",
+    Race == "Black or African American" ~ "Black",
+    Race == "White" ~ "White"
+  ))
+
+# Display the breakdown of deaths by subchapter using the descriptive name
+deaths_by_subchapter <- cod_filtered %>%
+  group_by(Subchapter) %>%
+  summarise(Total_Deaths = sum(Deaths, na.rm = TRUE))
+
+# Plot the breakdown of deaths by subchapter
+ggplot(deaths_by_subchapter, aes(x = Subchapter, y = Total_Deaths)) +
+  geom_bar(stat = "identity", fill="lightblue") +
+  labs(title = "Breakdown of Deaths by Subchapter", x = "Subchapter", y = "Total Deaths") +
+  theme_minimal()
+
+# Display the breakdown of deaths by subchapter using the descriptive name.
+deaths_by_subchapter
+
+```
+
+We see that Women marginally inclined to cause their own death, and Men marginally inclined to die when Traveling. I'd say even this plot is not so informative.
+
+c)  Create mosaic plots that show the association between race and subchapter, gender and subchapter, and age and subchapter. You can either create three separate graphs or one `pairs()` plot. Which variable appears to have the strongest association with subchapter?
+
+```{r}
+# Load necessary libraries
+library(vcd)
+
+#determine colors 
+colors <- c("lightpink", "lightblue", "lightgreen", "orange1")
+
+# Create mosaic plot for race and subchapter
+mosaic(Subchapter ~ Race, data = cod_filtered, main = "Race and Subchapter", rot_labels = c(0,90,90,0), direction = c("v","h"),highlighting_fill = colors)
+
+
+# Create mosaic plot for gender and subchapter
+mosaic(Subchapter ~ Gender, data = cod_filtered, main = "Gender and Subchapter",rot_labels = c(0,90,90,0), direction = c("v","h"),highlighting_fill = colors)
+
+# Create mosaic plot for age and subchapter
+mosaic(Subchapter ~ Ten.Year.Age.Groups.Code, data = cod_filtered, main = "Age and Subchapter", rot_labels = c(0,90,90,0), direction = c("v","h"),highlighting_fill = colors)
+```
+
+We see varying proportionality between Age group vs cause of death. This is relatively significant because number samples are evenly distributed among age groups. Due to this trend, Age group appears to have strong trend with cause of death.
+
+Coding tips:
+
+A warning that none of the common methods for combining multiple plots such as `par(mfrow = ...)`, `grid.arrange()` etc. work for `mosaic()` so don't head down that route.
+
+For `pairs()` to work with mosaic plots, `library(vcd)` needs to be loaded and the data must be in table form (use `xtabs()` to convert).
+
+d)  Use chi-square tests to test the relationships from part c). Do the results support what you found in the mosaic plots?
+
+```{r}
+# Contingency table for Subchapter and Race
+table_race_subchapter <- table(cod_filtered$Subchapter, cod_filtered$Race)
+
+# Chi-square test for Subchapter and Race
+chi_square_test_race <- chisq.test(table_race_subchapter)
+print("Chi-square test for Race and Subchapter:")
+print(chi_square_test_race)
+
+# Contingency table for Subchapter and Gender
+table_gender_subchapter <- table(cod_filtered$Subchapter, cod_filtered$Gender)
+
+# Chi-square test for Subchapter and Gender
+chi_square_test_gender <- chisq.test(table_gender_subchapter)
+print("Chi-square test for Gender and Subchapter:")
+print(chi_square_test_gender)
+
+# Contingency table for Subchapter and Ten-Year Age Groups
+table_age_subchapter <- table(cod_filtered$Subchapter, cod_filtered$Ten.Year.Age.Groups)
+
+# Chi-square test for Subchapter and Ten-Year Age Groups
+chi_square_test_age <- chisq.test(table_age_subchapter)
+print("Chi-square test for Ten-Year Age Groups and Subchapter:")
+print(chi_square_test_age)
+```
+
+Each of these tests have an extremely low p-value. This means that there is evidence to reject the null hypothesis and suggests that there is an association between the two variables. Race and Age Group have the smallest p value, signifying association with cause of death. Combining with the inference from mosaic plot thanks to balanced distribution of age group samples, I'd say Ten.Year.Age.Groups seem to have good influence on categorizing cause of death.
+
+e)  Create a mosaic plot that best shows the relationship between subchapter, race, age, and gender. What patterns do you observe that were not visible when you only consider two variables at a time? (Given that the racial groups are very different sizes, you may want to make a separate mosaic plot for each racial group.)
+
+```{r}
+# Load the vcd library if not already loaded
+library(vcd)
+
+# Create separate mosaic plots for each racial group
+race_groups <- unique(cod_filtered$Race)
+
+for (race in race_groups) {
+  subset_data <- cod_filtered[cod_filtered$Race == race, ]
+  mosaic(Subchapter ~ Gender + Ten.Year.Age.Groups.Code, data = subset_data, 
+             main = paste("Mosaic Plot for", race, "Race"), direction = c("v","v","h"),rot_labels = c(0,60,60,60),highlighting_fill = colors)
+}
+```
+
+It seems that Transportation Accidents decrease with age in all races. It also seems that cause of death of Assault/Undetermined is greater for the Asian race then any of the other races, while for Asian's it seems that Legal/Military/Medical is smaller than the other races.
+
+### 3. Alaska fire risk
+
+data: `akff_download.csv`
+
+The data file contains information about fire and fuel related indices for 12 regions of Alaska during the last 10 days of September 2021. The data was downloaded from https://akff.mesowest.org/
+
+The chart below provides a fire risk level associated with the measures found in the data (temperature, fine fuel moisture code, etc.)
+
+![](CFFDRSThresholds.jpg){width="65%"}
+
+Source: https://fire.ak.blm.gov/predsvcs/fuelfire.php
+
+a)  Identify the columns in the dataset matching first eight variables in the chart and create new columns for which the numeric values are coded according to the appropriate fire danger levels (`ATF` is temperature).
+
+Display the fire danger levels for these variables for Anchorage on September 23, 2021.
+
+```{r}
+
+# Read the data from the CSV file
+data <- read.csv("akff_download.csv")
+#data
+
+#print column names
+column_names <- names(data)
+print(column_names)
+
+print(class(data$DATE))
+
+# transform DATE using as.Date
+data$DATE <- as.Date(as.character(data$DATE), format = "%Y %m %d")
+#data
+```
+
+```{r}
+# Code against chart
+
+# Recode the ATF column using case_when
+data <- data %>%
+  mutate(ATF_Coded = case_when(
+    ATF < 50 ~ "Low",
+    ATF <= 59.9 ~ "Moderate",
+    ATF <= 69.9 ~ "High",
+    ATF <= 79.9 ~ "Very High",
+    ATF >= 80 ~ "Extreme"
+  ))
+
+# Recode the RHP column using case_when
+data <- data %>%
+  mutate(RHP_Coded = case_when(
+    RHP <= 20 ~ "Extreme",
+    RHP <= 30 ~ "Very High",
+    RHP <= 40 ~ "High",
+    RHP <= 50 ~ "Moderate",
+    RHP >= 51 ~ "Low"
+  ))
+
+# Recode the FFMC column using case_when
+data <- data %>%
+  mutate(FFMC_Coded = case_when(
+    FFMC < 80 ~ "Low",
+    FFMC < 86 ~ "Moderate",
+    FFMC < 89 ~ "High",
+    FFMC < 92 ~ "Very High",
+    FFMC >= 92 ~ "Extreme"
+  ))
+
+# Recode the DMC column using case_when
+data <- data %>%
+  mutate(DMC_Coded = case_when(
+    DMC <= 39.9 ~ "Low",
+    DMC <= 59.9 ~ "Moderate",
+    DMC <= 79.9 ~ "High",
+    DMC <= 99.9 ~ "Very High",
+    DMC >= 100 ~ "Extreme"
+  ))
+
+# Recode the DC column using case_when
+data <- data %>%
+  mutate(DC_Coded = case_when(
+    DC <= 149.9 ~ "Low",
+    DC <= 349.9 ~ "Moderate",
+    DC <= 399.9 ~ "High",
+    DC <= 449.9 ~ "Very High",
+    DC >= 450 ~ "Extreme"
+  ))
+
+# Recode the ISI column using case_when
+data <- data %>%
+  mutate(ISI_Coded = case_when(
+    ISI <= 1.9 ~ "Low",
+    ISI <= 4.9 ~ "Moderate",
+    ISI <= 7.9 ~ "High",
+    ISI <= 10.9 ~ "Very High",
+    ISI >= 11 ~ "Extreme"
+  ))
+
+# Recode the BUI column using case_when
+data <- data %>%
+  mutate(BUI_Coded = case_when(
+    BUI <= 39.9 ~ "Low",
+    BUI <= 59.9 ~ "Moderate",
+    BUI <= 89.9 ~ "High",
+    BUI <= 109.9 ~ "Very High",
+    BUI >= 110 ~ "Extreme"
+  ))
+
+# Recode the FWI column using case_when
+data <- data %>%
+  mutate(FWI_Coded = case_when(
+    FWI <= 8.9 ~ "Low",
+    FWI <= 17.9 ~ "Moderate",
+    FWI <= 27.9 ~ "High",
+    FWI <= 34.9 ~ "Very High",
+    FWI >= 35 ~ "Extreme"
+  ))
+
+# Print the resulting dataframe
+#print(data)
+
+```
+
+```{r}
+# Subset the dataframe based on location and date
+subset_data <- subset(data, NAME == "ANCHORAGE" & DATE == "2021-09-23")
+
+# Specify the columns to keep
+columns_to_keep <- c("NAME","DATE", "ATF_Coded", "RHP_Coded", "FFMC_Coded", "DMC_Coded", "DC_Coded", "ISI_Coded", "BUI_Coded", "FWI_Coded")
+
+# Select only the specified columns
+subset_data <- subset_data[, columns_to_keep, drop = FALSE]
+
+# Print the resulting dataframe
+print(subset_data)
+```
+
+b)  Create a single faceted heatmap showing the fire danger levels that you just created for all variables, all regions on all days. Sorting of categorical variables should be based on fire danger level.
+
+```{r}
+
+data <- data %>%
+    mutate(
+        ATF_enc =
+            case_when(
+                ATF_Coded == "Low" ~ 1,
+                ATF_Coded == "Moderate" ~ 2,
+                ATF_Coded == "High" ~ 3,
+                ATF_Coded == "Very High" ~ 4,
+                ATF_Coded == "Extreme" ~ 5
+            )
+    )
+
+data <- data  %>%
+    mutate(
+        RHP_enc =
+            case_when(
+                RHP_Coded == "Extreme" ~ 5,
+                RHP_Coded == "Very High" ~ 4,
+                RHP_Coded == "High" ~ 3,
+                RHP_Coded == "Moderate" ~ 2,
+                RHP_Coded == "Low" ~ 1
+            )
+    )
+
+data <- data  %>%
+    mutate(
+        FFMC_enc =
+            case_when(
+                FFMC_Coded == "Low" ~ 1,
+                FFMC_Coded == "Moderate" ~ 2,
+                FFMC_Coded == "High" ~ 3,
+                FFMC_Coded == "Very High" ~ 4,
+                FFMC_Coded == "Extreme" ~ 5
+            )
+    )
+
+data <- data  %>%
+    mutate(
+        DMC_enc =
+            case_when(
+                DMC_Coded == "Low" ~ 1,
+                DMC_Coded == "Moderate" ~ 2,
+                DMC_Coded == "High" ~ 3,
+                DMC_Coded == "Very High" ~ 4,
+                DMC_Coded == "Extreme" ~ 5
+            )
+    )
+
+data <- data  %>%
+    mutate(
+        DC_enc =
+            case_when(
+                DC_Coded == "Low" ~ 1,
+                DC_Coded == "Moderate" ~ 2,
+                DC_Coded == "High" ~ 3,
+                DC_Coded == "Very High" ~ 4,
+                DC_Coded == "Extreme" ~ 5
+            )
+    )
+
+data <- data  %>%
+    mutate(
+        ISI_enc =
+            case_when(
+                ISI_Coded == "Low" ~ 1,
+                ISI_Coded == "Moderate" ~ 2,
+                ISI_Coded == "High" ~ 3,
+                ISI_Coded == "Very High" ~ 4,
+                ISI_Coded == "Extreme" ~ 5
+            )
+    )
+
+data <- data  %>%
+    mutate(
+        BUI_enc =
+            case_when(
+                BUI_Coded == "Low" ~ 1,
+                BUI_Coded == "Moderate" ~ 2,
+                BUI_Coded == "High" ~ 3,
+                BUI_Coded == "Very High" ~ 4,
+                BUI_Coded == "Extreme" ~ 5
+            )
+    )
+
+data <- data  %>%
+    mutate(
+        FWI_enc =
+            case_when(
+                FWI_Coded == "Low" ~ 1,
+                FWI_Coded == "Moderate" ~ 2,
+                FWI_Coded == "High" ~ 3,
+                FWI_Coded == "Very High" ~ 4,
+                FWI_Coded == "Extreme" ~ 5
+            )
+    )
+```
+
+```{r}
+data_long <- data %>%
+  pivot_longer(
+    cols = ends_with("_Coded"),
+    names_to = "Variable",
+    values_to = "Level"
+  ) %>%
+  group_by(NAME, Variable, Level)
+
+data_long$Level <- factor(data_long$Level, levels = c("Low", "Moderate", "High", "Very High", "Extreme"))
+
+ordering <- list(ATF_Coded = mean(data$ATF), RHP_Coded = mean(data$RHP), ISI_Coded = mean(data$ISI), FW_Coded = mean(data$FWI), FFMC_Coded = mean(data$FFMC), DMC_Coded = mean(data$DMC), DC_Coded = mean(data$DC), BUI_Coded = mean(data$BUI), FWI_Coded = mean(data$FWI))
+sorted_list <- ordering[order(unlist(ordering))]
+data_long$CLASS <- factor(data_long$Variable, levels = names(sorted_list))
+```
+
+```{r}
+ggplot(data_long, aes(x = DATE, y = NAME)) +
+  geom_raster(aes(fill = Level)) +
+  facet_wrap(~CLASS, scales = "free_x") +
+  scale_fill_manual(
+    values = c("Low" = "green", "Moderate" = "yellow", "High" = "orange", "Very High" = "red", "Extreme" = "darkred"),
+    breaks = c("Low", "Moderate", "High", "Very High", "Extreme")
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1), # Rotate x-axis labels
+    strip.text.x = element_text(angle = 0)
+  )
+```
+
+```{r}
+ggplot(data_long, aes(x = CLASS, y = DATE)) +
+  geom_raster(aes(fill = Level)) +
+  facet_wrap(~NAME, scales = "free_x") +
+  scale_fill_manual(
+    values = c("Low" = "green", "Moderate" = "yellow", "High" = "orange", "Very High" = "red", "Extreme" = "darkred"),
+    breaks = c("Low", "Moderate", "High", "Very High", "Extreme")
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    strip.text.x = element_text(angle = 0)
+  )
+```
+
+c)  Identify notable trends in the data.
+
+Based on this graph, it seems that the most variable factor is FWI_Coded. We say that because each day, there is a different fire danger level for pretty much all regions. It seems also that the days with the lowest fire danger was 09/24/2021 and 09/25/2021 because those two days had the highest low fire danger level variables for each region and category. In general, it seems that FFMC_Coded is always Moderate except for Rabbit Creek and Campbell Creek. It seems that the first day of analysis (09/21/2021) was the day that had the highest number of high values for each coded category. That probably implies that it was the most dangerous day. It also seems that Rabbit Creek and Eagle River tend to, in this time period, have the least fire danger across all days.
+
+-   Talkeetna and PT Mac seem to be located where they are more prone to fire. These can be flagged as fire prone since they have such high RHP and ISI values.
+
+-   Conversely, Eagle River and Rabit Creek seem to be relatively safer.
+
+-   During 28th and 29th Sept 2021, we see high RHP values across Alaska (relative to our database), meaning there might have been some large scale phenomenon that could potentially be tracked to reduce risk of future RHP rise.
+
+### 4. Community districts
+
+data: `CBDBManhattan.csv`
+
+For this question we'll use a subset of data from a survey on NYC attitudes toward various quality of life issues. The original source of the data is: <https://cbcny.org/sites/default/files/media/files/Manhattan%20Community%20District%20Results.pdf>
+
+We will work only with the `Non-safety QoL` indicators so remove data relating to other indicator types.
+
+a)  Draw a biplot of the results of a PCA analysis. In the biplot, the vectors should be the indicators and the points the community districts. You will need to transform the data to get it in the right form for this plot. To do so, use `pivot_longer()` and `pivot_wider()`.
+
+```{r}
+# Read the data from the CSV file
+community <- read.csv("ManhattanCDResults.csv")
+#print(community)
+
+# subset to only work with Non-safety QoL data
+community_df <- subset(community, Type == "Non-safety QoL")
+#print(community_df)
+community_df <- community_df[ -c(2) ]
+#print(community_df)
+
+# Convert cd columns to numeric
+community_df <- community_df %>%
+  mutate(across(starts_with("cd"), ~as.numeric(sub("%", "", .))))
+
+# Print the modified data
+#print(class(community_df$cd1))
+
+```
+
+```{r}
+library(tidyverse)
+
+# Pivot data to long format
+community_df_long <- community_df %>%
+  pivot_longer(cols = -Indicator, names_to = "CommunityDistrict", values_to = "Value") %>%
+  filter(!is.na(Value))  # Remove NA values
+
+# Extracting indicators
+indicators <- community_df_long$Indicator
+
+# Creating a data frame for PCA
+community_df_pca <- community_df_long %>%
+  pivot_wider(names_from = Indicator, values_from = Value) %>%
+  mutate(CommunityDistrict = as.character(CommunityDistrict))  # Ensure character type
+
+community_df_pca
+
+#apply PCA
+
+pca <- prcomp(community_df_pca[,2:10], scale.=TRUE)
+summary(pca)
+
+mat_round <- function(matrix, n = 3) apply(matrix, 2, function(x) round(x, n))
+
+mat_round(pca$rotation)
+
+#install redav package
+#remotes::install_github("jtr13/redav")
+library(redav)
+
+draw_biplot(community_df_pca, arrows=FALSE) #based on this, seems to be 5 clusters
+
+scores <- pca$x[,1:2]
+k <- kmeans(scores, centers = 5)
+scores <- data.frame(scores) %>%
+  mutate(cluster = factor(k$cluster), CommunityDistrict = community_df_pca$CommunityDistrict)
+g4 <- ggplot(scores, aes(PC1, PC2, color = cluster, label = CommunityDistrict)) +
+  geom_point() +
+  geom_text(nudge_y = .2) +
+  guides(color="none")
+g4
+
+draw_biplot(community_df_pca)
+```
+
+For parts b) and c), answer based on your biplot from part a).
+
+```{r}
+draw_biplot(community_df_pca, "Availability of health care services")
+draw_biplot(community_df_pca, "Control of street noise")
+draw_biplot(community_df_pca, "Rat control")
+```
+
+b)  Indicators
+
+-   Which indicator is the most uncorrelated with `Availability of health care services`? The indicator that is the most uncorrelated with `Availability of health care services` is `Air Quality`. That is because that the `Air Quality` vector is the closest to being perpendicular to `Availability of health care services`.
+
+-   Which indicator is most positively correlated with `Control of street noise`? The indicator that is the most positively correlated with `Control of street noise` is `Neighborhood playgrounds`. That is because the variable pointing in a similar direction with the smallest angle between the two is `Neighborhood playgrounds`.
+
+-   Which indicator is most negatively correlated with `Rat control`? The indicator that is the most negatively correlated with `Rat control` is `Traffic`. That is because this indicator's vector is pointing in the opposite direction of `Rat control` vector.
+
+```{r}
+scores <- pca$x[,1:2]
+k <- kmeans(scores, centers = 5)
+scores <- data.frame(scores) %>%
+  mutate(cluster = factor(k$cluster), CommunityDistrict = community_df_pca$CommunityDistrict)
+g4 <- ggplot(scores, aes(PC1, PC2, color = cluster, label = CommunityDistrict)) +
+  geom_point() +
+  geom_text(nudge_y = .2) +
+  guides(color="none")
+g4
+
+draw_biplot(community_df_pca)
+
+```
+
+c)  Clusters
+
+-   What clusters do you observe? We observed that there were 5 clusters. One thing to note is that the values in cd1 and cd2 are the same, so the information is a litle skewed. The clusters are cluster 1: cd7, cluster 2: cd8, cd1, cd2, cluster 3: cd4, cluster 4: cd5, cd6, and cluster 5: cd9, cd10, cd11, cd3, cd12.
+
+-   Are the districts in each cluster located near each other geographically? In general it seems that the districts that form a cluster tend to be geographically located near eachother. The only time that is not the case is for cluster 5 with cd3, cluster 2 with cd8. And then there are two clusters that are compromised of only single districts.
+
+-   Which district(s) if any are outliers? The clusters that are outliers would be cd7. For cd7, we think it is a cluster because that cluster is farthest from any of the other clusters. If you are only looking for a district that deviates significantly from the overall pattern of the data, that is cd7.
+
+-   Which district would you choose to live in based on the biplot? Based on the biplot, I would want to live in cd7. That is because while air quality seems to be low, the other variables seem to be positive. Also, the traffic and air quality is not as bad as cd5 and cd6. Also, they are more closely related to availability of healthcare services, cleanliness, and availability of cultural activities which are important to us.
+
+d)  `Traffic`
+
+```{r}
+# Extract 'Traffic' values and corresponding CommunityDistrict
+traffic_order <- community_df_long %>%
+  filter(Indicator == "Traffic") %>%
+  arrange(Value) %>%
+  select(CommunityDistrict)
+
+print(traffic_order)
+```
+
+```{r}
+draw_biplot(community_df_pca, "Traffic")
+```
+
+Draw another biplot of the data in which the `Traffic` variable is calibrated.
+
+-   What is the order of the projected points from lowest to highest along this dimension? To find the order you go from the negative number (-1.5) which means less traffic to the high value (2) which means more traffic. So doing this, the order is cd6, cd5, cd8, cd2, cd1, cd12, cd3, cd4, cd11, cd9, cd10, and then cd7.
+
+-   How does this order compare to the true order found in the original data? The order in the original data is cd1, cd2, cd5, cd8, cd6, cd3, cd12, cd9, cd11, cd4, cd10, cd7. It seems that in general, if the values were in the lower half in the original data, then they remained in the lower half and same goes with the values in the upper half. Also the most extreme value still remained last in both orders.

@@ -1,0 +1,332 @@
+---
+title: "PSet1-Fall23"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+date: "2023-09-19"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+BY: Alexandra Kakadiaris and Ishita Pundir
+UNI- ak5087 and ip2441
+
+
+
+## 1. S&P 500
+
+$$8 points$$
+
+### a) Use the **tidyquant** package to get closing stock prices and volume traded for the S&P 500 stocks on September 11, 2023. Save the data as a `.csv` file and comment out the lines you used to get the data.
+
+```{r}
+#install package needed 
+#install.packages("tidyquant") 
+library(dplyr)
+library(tidyquant)
+
+#SP500 <- tq_index("SP500")
+
+#View(SP500)
+#SP500 <- SP500 %>%
+#  filter(!symbol %in% c("-"))
+
+#get the closing stock prices and volume traded for the S&P 500 stocks on 9/11/2023 
+#sp= data.frame()
+#for (s in SP500$symbol){
+ # sp_stock= tq_get(x=s, get ="stock.prices", from = "2023-09-11", to = "2023-09-12") 
+  
+#spdata= sp_stock%>%select(c("symbol","volume","close"))
+#sp=rbind(sp,spdata)
+#}
+
+#View(sp)
+
+#save the data as a .csv file 
+#write.csv(sp, file = "sp500_data.csv", row.names = TRUE)
+```
+
+### b) Read the data from the `.csv` file you created in part a) and show its dimensions as well as the first 6 rows.
+
+```{r}
+# Read the data from the .csv file
+sp500_data <- read.csv("sp500_data.csv")
+
+# Dimensions
+dim(sp500_data)
+
+# First 6 rows
+head(sp500_data)
+```
+
+### c) Draw a histogram of the `volume` column. Describe what you see using the list on p. 29 of the textbook as a guide. What makes this histogram challenging to read?
+
+```{r}
+#create a histogram of the volume column
+hist(sp500_data$volume, main = "Volume Histogram", xlab = "Volume")
+
+```
+
+When looking at the histogram, it is challenging to read because the frequency is extremely small and it seems that the data is heavily skewed, hinting that there is asymmetry. This makes it difficult to see the distribution patterns and identify specific characteristics.
+
+### d) Devise a method to address the issue you identified in part c). Your new graph or graphs should provide more information than the graph in part c). Describe this new information about the distribution of the variable as well the logic behind your method.
+
+We chose to apply a log transformation before creating the histogram. That is because, a log transformation can help spread out values and helps showcase the underlying pattern of the data more clearly, which shows the distribution of the data more clearly that the histogram created above.
+
+```{r}
+
+log_volume <- log(sp500_data$volume)
+
+hist(log_volume, main = "Log-Transformed Volume Histogram", xlab = "Log(Volume)")
+```
+
+## 2. Bad Drivers
+
+$$7 points$$
+
+### Data: *bad_drivers* in **fivethirtyeight** package
+
+### a) Draw two histograms--one with base R and the other with **ggplot2**--of the variable representing the Percentage of drivers involved in fatal collisions who were alcohol-impaired without change the default parameters. What is the default method each uses to determine the number of bins? (For base R, do the calculation manually and compare to the number of bins in the graph.) Which do you think is a better choice for this dataset and why? This means to find the the actual formula that is used to calculate the number of bins and plug in the values necessary to compute the number of bins.
+
+By default, ggplot2 creates a histogram with 30 bins, whereas base R uses the Sturges' formula to determine the number of bins.
+
+Sturges' rule is to set the number of intervals as close as possible to  1+log2(N), where log2(N)is the base 2 log of the number of observations. 
+Here, n=51
+So, 1+log2(51)= 1+5.6724= 6.6724
+ceiling(6.6724)=7
+
+We think that the ggplot2 histogram is much better. With more bins, you can tell more information about the data. With the base R plot, you can see high-level distribution of the variable, but you can't see more detailed information.
+
+```{r}
+#install package needed
+#install.packages("fivethirtyeight")
+library(fivethirtyeight)
+library(tidyverse) 
+library(ggplot2)
+library(readr)
+
+head(bad_drivers)
+bad_drivers <- bad_drivers
+
+# to find the number of bins, we used Sturges' formula which estimates the optimal number of bins based on the number of data points in the dataset
+# the formula is log2(n)+1 
+# Assuming 'n' is the number of data points
+n <- nrow(bad_drivers)
+
+# Calculate the number of bins using Sturges' formula
+k <- ceiling(log2(n) + 1)
+print(k)
+
+#histogram using base R
+hist(bad_drivers$perc_alcohol, breaks=k, col="lightblue", main = "Base R Histogram", xlab = "Percent of Alcohol Affected Drivers")
+
+#histogram using ggplot2
+ggplot(bad_drivers, aes(x = perc_alcohol)) +
+  geom_histogram(binwidth = NULL, fill = "lightblue", color = "black") +
+  labs(title = "ggplot2 Histogram", x = "Percent of Alcohol Affected Drivers")
+```
+
+
+### b) Draw two histograms of the `perc_alcohol` variable with boundaries at multiples of 5, one right closed and one right open. Every boundary should be labeled (15, 20, 25, etc.)
+
+```{r}
+#right closed histogram
+right_closed <- ggplot(bad_drivers, aes(x=perc_alcohol)) + 
+  geom_histogram(binwidth = 5, boundary = 5,right=TRUE,fill="lightblue", col="black") +
+  labs(x="Alcohol Impaired Drivers", y="Count", title = "Right Closed Histogram") +
+  scale_x_continuous(breaks = seq(15, 45, by = 5))
+  theme(plot.title = element_text(hjust = 0.5, size=20))
+  
+  
+#right open histogram 
+right_open <- ggplot(bad_drivers, aes(x=perc_alcohol)) + 
+  geom_histogram(binwidth = 5, boundary = 5,right=FALSE, fill="lightblue", col="black") +
+  labs(x="Alcohol Impaired Drivers", y="Count", title = "Right Open Histogram") +
+  scale_x_continuous(breaks = seq(15, 45, by = 5))
+  theme(plot.title = element_text(hjust = 0.5, size=20))
+  
+#install.packages("gridExtra") 
+library(gridExtra)
+grid.arrange(right_closed,right_open,ncol=2)
+
+```
+
+### c) Adjust parameters--the same for both--so that the right open and right closed versions become identical. Explain your strategy.
+
+Since right closed and right open has to do with messing with the boundary of the numbers included in a bin (where the value goes if it is on the boundary), we decided on changing the boundary values to see if that would help the graphs be similar. By changing the bin boundary for both of the graphs, we see a similar graph. The right closed having a boundary that is one less than the right open. 
+
+```{r}
+
+#View(bad_drivers)
+
+#right closed histogram
+right_closed <- ggplot(bad_drivers, aes(x=perc_alcohol)) + 
+  geom_histogram(binwidth = 5, boundary = 7,right=TRUE,fill="lightblue", col="black") +
+  labs(x="Alcohol Impaired Drivers", y="Count", title = "Right Closed Histogram") +
+  scale_x_continuous(breaks = seq(15, 45, by = 5))
+  theme(plot.title = element_text(hjust = 0.5, size=20))
+  
+  
+#right open histogram 
+right_open <- ggplot(bad_drivers, aes(x=perc_alcohol)) + 
+  geom_histogram(binwidth = 5, boundary = 8,right=FALSE, fill="lightblue", col="black") +
+  labs(x="Alcohol Impaired Drivers", y="Count", title = "Right Open Histogram") +
+  scale_x_continuous(breaks = seq(15, 45, by = 5))
+  theme(plot.title = element_text(hjust = 0.5, size=20))
+  
+#install.packages("gridExtra") 
+library(gridExtra)
+grid.arrange(right_closed,right_open,ncol=2)
+
+```
+
+## 3. Birds
+
+$$8 points$$
+
+### Data: *birds* in **openintro** package
+
+### a) Use appropriate techniques to describe the distribution of the `speed` variable noting interesting features.
+
+Based on this histogram, there does seem to be some outliers and the majority of the values are between 100-150
+
+```{r}
+#install package needed
+#install.packages("openintro")
+library(openintro)
+
+
+head(birds)
+#describe the distribution of the speed variable noting interesting featues
+hist(birds$speed)
+ggplot(birds, aes(x=speed)) + 
+  geom_histogram(binwidth = 10, boundary = 10,closed = "left",freq=TRUE, col="black",fill="lavender") +
+  scale_x_continuous(breaks = seq(0, 400, by = 50))
+```
+
+### b) Create horizontal boxplots of `speed`, one for each level of `time_of_day`.
+
+```{r}
+#create horizontal boxplots of speed, one for each level of time_of_day
+birds_boxplot <-birds %>% 
+  ggplot(aes(x=speed, y=time_of_day)) +
+  geom_boxplot()
+birds_boxplot
+```
+
+### c) Create ridgeline plots for the same data as in b)
+
+```{r}
+#create ridgeline plots for the same data in example above 
+#install.packages("ggridges")
+library(ggridges)
+birds_ridgeline <- birds %>% 
+  ggplot(aes(x=speed, y=time_of_day, fill=time_of_day)) +
+  geom_density_ridges()
+birds_ridgeline
+```
+
+### d) Compare the boxplot plots and the ridgeline plots.
+
+With the ridgelines, we seem to think that we get more information about the frequency of speeds and peaks in the data whereas the boxplot gives clearer information about the outliers which is not as accurate in the ridgeline plot.
+
+```{r}
+#compare the box plots and the ridgeplots 
+grid.arrange(birds_boxplot,birds_ridgeline,ncol=2)
+
+```
+
+### e) Create a graph that combines boxplots and ridgeline plots. In your view is the combined graph an improvement over the separate ones? Briefly explain.
+
+In our view, both overlayed is better because you get more information about the density and peaks because of the ridgeline plot while also seeing the outliers and means accurately.
+
+```{r}
+#graph that combines boxplots and ridgeline plots 
+birds_both <- birds %>% 
+  ggplot(aes(x=speed, y=time_of_day), 
+         scale= 0.9) +
+  geom_density_ridges()+
+  geom_boxplot()
+birds_both
+```
+
+## 4. Titanic Survival
+
+$$8 points$$
+
+### Data: *TitanicSurvival* in **carData** package
+
+### a) Use QQ (quantile-quantile) plots with theoretical normal lines to compare `age` of **passengers who did not survive from Titanic** for the three different levels of `passengerClass`. What are some findings and for which class does the distribution of the `age` variable appear to be closest to a normal distribution?
+
+```{r}
+#install package needed
+#install.packages("carData")
+library(carData)
+
+head(TitanicSurvival)
+
+#subset the data to include only passengers who did not survive
+didnt_survive <- subset(TitanicSurvival, survived == "no")
+
+#QQ plots with theoretical normal lines 
+qqplot <- didnt_survive %>%
+  ggplot(aes(sample = age)) +
+  geom_qq(distribution = qnorm) +
+  facet_wrap(~ passengerClass, nrow=2,scales = "free")+
+  geom_qq_line(col="red") +
+  labs(title = "QQ Plot of Age by Passenger Class (Not Survived)", x = "Theoretical Quantiles", y = "Sample Quantiles")
+qqplot
+```
+
+### b) Draw density histograms with density curves and theoretical normal curves overlaid of `age` for the three passenger classes.
+
+```{r}
+dens <- ggplot(didnt_survive, aes(age)) +
+  geom_histogram(aes(y=after_stat(density)),fill="lightblue",col="black", alpha=.5) +
+  geom_density(lwd = 1.25) +
+  stat_function(fun = dnorm, args = list(mean = mean(didnt_survive$age,na.rm = TRUE), sd = sd(didnt_survive$age,na.rm = TRUE)), color="red", lwd=1.25, linetype='dashed') +
+  facet_grid(didnt_survive$passengerClass) +
+  scale_x_continuous(breaks = seq(0, 90, by = 5)) 
+dens
+
+```
+
+### c) Use a statistical method of your choice, such as the Shapiro-Wilk test, to determine which `age` distribution is closest to a normal distribution.
+
+It seems that only the first age distribution is closest to a normal distribution. That is because, that is the only subset of data in which the p-value is greater than 0.05.
+
+```{r}
+#install.packages("dplyr")
+library(dplyr)
+
+first <- subset(TitanicSurvival, passengerClass == '1st' & survived=='no')
+second <- subset(TitanicSurvival, passengerClass == '2nd' & survived=='no')
+third <- subset(TitanicSurvival, passengerClass == '3rd' & survived=='no')
+
+# Using the set.seed() for 
+# random number generation
+set.seed(1234)
+
+# Using the shapiro.test() to check
+# for normality based 
+# on the len parameter
+one <- shapiro.test(first$age)
+two <- shapiro.test(second$age)
+three <- shapiro.test(third$age)
+
+one
+two
+three
+
+```
+
+### d) Did all of the methods for testing for normality (a, b, and c) produce the same results? Briefly explain.
+
+The QQ plot (quantile-quantile plot), is a graphical tool to help us assess if a set of data plausibly came from some theoretical distribution such as a normal (in this case). If both sets of quantiles came from the same distribution, we should see the points forming a line that's roughly straight.
+
+Part (a) showed that the first and the third class might be normally distributed.
+Part (b) signified that the first class is the most normally distributed as the other two had skewed density plots and did not align with the normal distribution plot.
+Part (c) confirms, with the help of the Shapiro-Wilk normality test that the first age distribution is closest to a normal distribution as it is the only subset of data in which the p-value is greater than 0.05.
